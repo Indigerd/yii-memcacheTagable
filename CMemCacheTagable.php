@@ -10,9 +10,52 @@ class CMemCacheTagable extends CMemCache
 
     public $tagKeyPrefix = 'tag_';
 
-    public function set($id, $value, $expire = 0, $tags = null)
+    public function set($id, $value, $expire = 0, $tags = null, $dependency=null)
     {
+        if ($tags === null) {
+            return parent::set($id, $value, $expire, $dependency);
+        }
+        if (is_array($tags)) {
+            $tags      = array_map([$this, 'generateTagKey'], array_values($tags));
+            $tagsData  = $this->getValues($tags);
+            $tagsCount = count($tagsData, COUNT_RECURSIVE);
 
+            if (empty($tagsData)) {
+                $tagsData = array_fill_keys($tags, [$id]);
+            } else {
+                foreach ($tags as $tag) {
+                    if (empty($tagsData[$tag])) {
+                        $tagsData[$tag] = [$id];
+                    } else if (! in_array($id, $tagsData[$tag], true)) {
+                        $tagsData[$tag][] = $id;
+                    }
+                }
+            }
+
+            if (count($tagsData, COUNT_RECURSIVE) !== $tagsCount) {
+                $this->setValues($tagsData, $expire);
+            }
+        } else {
+            $tag      = $this->generateTagKey($tags);
+            $tagData  = $this->getValue($tag);
+            $tagCount = count($tagData);
+
+            if (empty($tagData)) {
+                $tagData = [$id];
+            } else if (! in_array($id, $tagData, true)) {
+                $tagData[] = $id;
+            }
+
+            if (count($tagData) !== $tagCount) {
+                parent::set($tag, $tagData, 0);
+            }
+        }
+        return parent::set($id, $value, $expire, $dependency);
+    }
+
+    protected function setValues($data, $expire = 0)
+    {
+        foreach ($data as $id => $value) parent::set($id, $value, $expire);
     }
 
     public function setMany(array $data, $expire = 0, $tags = null)
