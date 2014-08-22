@@ -19,7 +19,6 @@ class CMemCacheTagable extends CMemCache
             $tags      = array_map([$this, 'generateTagKey'], array_values($tags));
             $tagsData  = $this->getValues($tags);
             $tagsCount = count($tagsData, COUNT_RECURSIVE);
-
             if (empty($tagsData)) {
                 $tagsData = array_fill_keys($tags, [$id]);
             } else {
@@ -31,7 +30,6 @@ class CMemCacheTagable extends CMemCache
                     }
                 }
             }
-
             if (count($tagsData, COUNT_RECURSIVE) !== $tagsCount) {
                 $this->setValues($tagsData, $expire);
             }
@@ -39,13 +37,11 @@ class CMemCacheTagable extends CMemCache
             $tag      = $this->generateTagKey($tags);
             $tagData  = $this->getValue($tag);
             $tagCount = count($tagData);
-
             if (empty($tagData)) {
                 $tagData = [$id];
             } else if (! in_array($id, $tagData, true)) {
                 $tagData[] = $id;
             }
-
             if (count($tagData) !== $tagCount) {
                 parent::set($tag, $tagData, 0);
             }
@@ -60,10 +56,50 @@ class CMemCacheTagable extends CMemCache
 
     public function setMany(array $data, $expire = 0, $tags = null)
     {
-
+        if ($tags === null) {
+            return $this->setMany($data, $expire);
+        }
+        if (is_array($tags)) {
+            $tags      = array_map([$this, 'generateTagKey'], array_values($tags));
+            $tagsData  = $this->getValues($tags);
+            $tagsCount = count($tagsData, COUNT_RECURSIVE);
+            if (empty($tagsData)) {
+                $tagsData = array_fill_keys($tags, array_keys($data));
+            } else {
+                foreach ($tags as $tag) {
+                    if (empty($tagsData[$tag])) {
+                        $tagsData[$tag] = array_keys($data);
+                    } else {
+                        $tagsData[$tag] = array_merge(
+                            array_diff(array_keys($data), $tagsData[$tag]),
+                            $tagsData[$tag]
+                        );
+                    }
+                }
+            }
+            if (count($tagsData, COUNT_RECURSIVE) !== $tagsCount) {
+                $this->setValues($tagsData, $expire);
+            }
+        } else {
+            $tag      = $this->generateTagKey($tags);
+            $tagData  = $this->getValue($tag);
+            $tagCount = count($tagData);
+            if (empty($tagData)) {
+                $tagData = array_keys($data);
+            } else {
+                $tagData = array_merge(
+                    array_diff(array_keys($data), $tagData),
+                    $tagData
+                );
+            }
+            if (count($tagData) !== $tagCount) {
+                parent::set($tag, $tagData, 0);
+            }
+        }
+        return $this->setValues($data, $expire);
     }
 
-    public function getByTag($tags, $byIntersect = false)
+    public function getByTag($tags)
     {
         $result  = [];
         $tags    = is_array($tags) ? array_map([$this, 'generateTagKey'], array_values($tags)) : $this->generateTagKey($tags);
@@ -88,7 +124,8 @@ class CMemCacheTagable extends CMemCache
         }
     }
 
-    protected function deleteMany(array $ids) {
+    protected function deleteMany(array $ids)
+    {
         $ids = array_map([$this, 'generateUniqueKey'], $ids);
         foreach ($ids as $id) $this->deleteValue($id);
     }
